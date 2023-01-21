@@ -5,10 +5,13 @@ pragma solidity ^0.8.7;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 error NftMarketplace__NotEnoughEthForListFee();
+error NftMarketplace__NotEnoughEthToBuy();
+error NftMarketplace__TransferFailed();
 error NftMarketplace__PriceMustBeAboveOrEqualZero();
-error NftMarketplace__TransferNotApprovedForMarkeplace();
+error NftMarketplace__TransferNotApprovedForMarketplace();
 error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__NotOwner();
+error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
 
 contract NftMarketplace {
     /* Type Declarations */
@@ -21,6 +24,7 @@ contract NftMarketplace {
     uint256 private s_listFee;
     mapping(address => mapping(uint256 => Listing)) private s_listings;
     // something to keep track
+    mapping(address => uint256) private s_balances;
 
     /* Contract Speciic Variables */
 
@@ -30,6 +34,21 @@ contract NftMarketplace {
         address indexed nftAddress,
         uint256 indexed tokenId,
         uint256 price
+    );
+
+    event ItemPurchased(
+        address seller,
+        address indexed buyer,
+        address indexed nftAddress,
+        uint256 indexed tokenId,
+        uint256 price
+    );
+
+    event ItemUpdated(
+        address indexed seller,
+        address indexed NftAddress,
+        uint256 indexed tokenId,
+        uint256 newPrice
     );
 
     /* Constructors */
@@ -52,7 +71,9 @@ contract NftMarketplace {
 
     modifier isListed(address nftAddress, uint256 tokenId) {
         Listing memory listing = s_listings[nftAddress][tokenId];
-        if (listing.price <= 0) {}
+        if (listing.price <= 0) {
+            revert NftMarketplace__NotListed(nftAddress, tokenId);
+        }
         _;
     }
 
@@ -95,24 +116,70 @@ contract NftMarketplace {
             revert NftMarketplace__NotEnoughEthForListFee();
         }
         // check if price is equal or above
-        if (price <= 0) {
+        if (price < 0) {
             revert NftMarketplace__PriceMustBeAboveOrEqualZero();
         }
         // Approve NFT transfer for listed item
         IERC721 nft = IERC721(nftAddress);
         if (nft.getApproved(tokenId) != address(this)) {
-            revert NftMarketplace__TransferNotApprovedForMarkeplace();
+            revert NftMarketplace__TransferNotApprovedForMarketplace();
         }
         // Update listings
         s_listings[nftAddress][tokenId] = Listing(price, msg.sender);
         emit ItemListed(msg.sender, nftAddress, tokenId, price);
     }
 
-    function buyItem(address nftAddress, uint256 tokenId) external payable {
-        //
+    function buyItem(address nftAddress, uint256 tokenId)
+        external
+        payable
+        isListed(nftAddress, tokenId)
+    {
+        uint256 price = s_listings[nftAddress][tokenId].price;
+        if (msg.value < price) {
+            revert NftMarketplace__NotEnoughEthToBuy();
+        }
+        // check if msg.value is equal to the price of the NFT AND if NFT is approved for transfer by this contract, otherwise revert with errors
+        address seller = s_listings[nftAddress][tokenId].seller;
+        // call NFT transfer function
+        IERC721 nft = IERC721(nftAddress);
+        nft.transferFrom(seller, msg.sender, tokenId);
+        // increase owner's balance by msg.value
+        s_balances[msg.sender] += msg.value;
+        // remove item from s_listings --> how to safely remove item from mapping?
+
+        // emit Item Bought event
+        emit ItemPurchased(seller, msg.sender, nftAddress, tokenId, price);
     }
 
-    function updateListing() public payable {}
+    function updateListing(
+        address nftAddress,
+        uint256 tokenId,
+        uint256 newPrice
+    ) public isOwner(nftAddress, tokenId, msg.sender) {
+        if (newPrice == 0) {
+            revert NftMarketplace__PriceMustBeAboveOrEqualZero();
+        }
+        s_listings[nftAddress][tokenId] = Listing(newPrice, msg.sender);
+        emit ItemUpdated(msg.sender, nftAddress, tokenId, newPrice);
+    }
 
-    function withdrawProceeds() public {}
+    function withdrawProceeds() public {
+        (bool success, ) = msg.sender.call{value: s_balances[msg.sender]}("");
+        if (!success) {
+            revert NftMarketplace__TransferFailed();
+        }
+        s_balances[msg.sender] = 0;
+    }
+
+    function getListFee() public view returns (uint256) {
+        return s_listFee;
+    }
+
+    function getListingPrice(address nftAddress, uint256 tokenId) public view returns (uint256) {
+        return s_listings[nftAddress][tokenId].price;
+    }
+
+    function getListingSeller(address nftAddress, uint256 tokenId) public view returns (address) {
+        return s_listings[nftAddress][tokenId].seller;
+    }
 }

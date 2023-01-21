@@ -11,6 +11,7 @@ const networkConfig = {
         interval: "30",
         contractCost: ethers.utils.parseEther("0.001"),
         mintFee: ethers.utils.parseEther("0.001"),
+        listFee: ethers.utils.parseEther("0.001"),
         ethUsdPriceFeed: "0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e",
     },
     31337: {
@@ -21,6 +22,7 @@ const networkConfig = {
         interval: "30",
         contractCost: ethers.utils.parseEther("0.001"),
         mintFee: ethers.utils.parseEther("0.01"),
+        listFee: ethers.utils.parseEther("0.01"),
     },
 }
 const developmentChains = ["hardhat", "localhost"]
