@@ -164,7 +164,7 @@ contract NftMarketplace {
         uint256 tokenId,
         uint256 newPrice
     ) public isOwner(nftAddress, tokenId, msg.sender) {
-        if (newPrice == 0) {
+        if (newPrice <= 0) {
             revert NftMarketplace__PriceMustBeAboveOrEqualZero();
         }
         s_listings[nftAddress][tokenId] = Listing(newPrice, msg.sender);

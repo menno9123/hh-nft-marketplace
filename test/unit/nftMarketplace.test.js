@@ -195,4 +195,42 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
                   assert.equal(0, sellerBalance.toString())
               })
           })
+          describe("updateListing", function () {
+              beforeEach(async function () {
+                  await basicNFT.approve(NftMarketplace.address, 0)
+                  price = ethers.utils.parseEther("0.1")
+                  tokenId = 0
+                  await NftMarketplace.listItem(nftAddress, tokenId, price, {
+                      value: listFee.toString(),
+                  })
+              })
+              it("only allows owner of NFT to update listing", async function () {
+                  const accounts = await ethers.getSigners()
+                  const accountConnectedNftMarketplace = NftMarketplace.connect(accounts[1])
+                  await expect(
+                      accountConnectedNftMarketplace.updateListing(
+                          nftAddress,
+                          0,
+                          ethers.utils.parseEther("0.001")
+                      )
+                  ).to.be.revertedWith("NftMarketplace__NotOwner")
+                  currentPrice = await NftMarketplace.getListingPrice(nftAddress, 0)
+                  assert.equal(price.toString(), currentPrice.toString())
+              })
+              it("does not update if price less or equal zero", async function () {
+                  await expect(NftMarketplace.updateListing(nftAddress, 0, 0)).to.be.revertedWith(
+                      "NftMarketplace__PriceMustBeAboveOrEqualZero"
+                  )
+              })
+              it("updates the listing price correctly", async function () {
+                  await NftMarketplace.updateListing(nftAddress, 0, ethers.utils.parseEther("0.2"))
+                  newPrice = await NftMarketplace.getListingPrice(nftAddress, 0)
+                  assert.equal(ethers.utils.parseEther("0.2").toString(), newPrice.toString())
+              })
+              it("emits an event when the listing is updated succesfully", async function () {
+                  await expect(
+                      NftMarketplace.updateListing(nftAddress, 0, ethers.utils.parseEther("0.2"))
+                  ).to.emit(NftMarketplace, "ItemUpdated")
+              })
+          })
       })
