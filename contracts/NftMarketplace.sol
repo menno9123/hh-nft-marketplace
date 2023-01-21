@@ -12,6 +12,7 @@ error NftMarketplace__TransferNotApprovedForMarketplace();
 error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__NotOwner();
 error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
+error NftMarketplace__ZeroBalance();
 
 contract NftMarketplace {
     /* Type Declarations */
@@ -90,6 +91,13 @@ contract NftMarketplace {
         _;
     }
 
+    modifier onlyNonZeroBalance(address balanceowner) {
+        if (s_balances[balanceowner] == 0) {
+            revert NftMarketplace__ZeroBalance();
+        }
+        _;
+    }
+
     /*
      * @notice Method for listing NFTs on the marketplace
      * @param nftAddress: Address of the NFT to be listed
@@ -144,7 +152,7 @@ contract NftMarketplace {
         IERC721 nft = IERC721(nftAddress);
         nft.transferFrom(seller, msg.sender, tokenId);
         // increase owner's balance by msg.value
-        s_balances[msg.sender] += msg.value;
+        s_balances[seller] += msg.value;
         // remove item from s_listings --> how to safely remove item from mapping?
 
         // emit Item Bought event
@@ -163,7 +171,7 @@ contract NftMarketplace {
         emit ItemUpdated(msg.sender, nftAddress, tokenId, newPrice);
     }
 
-    function withdrawProceeds() public {
+    function withdrawProceeds() public onlyNonZeroBalance(msg.sender) {
         (bool success, ) = msg.sender.call{value: s_balances[msg.sender]}("");
         if (!success) {
             revert NftMarketplace__TransferFailed();
@@ -181,5 +189,9 @@ contract NftMarketplace {
 
     function getListingSeller(address nftAddress, uint256 tokenId) public view returns (address) {
         return s_listings[nftAddress][tokenId].seller;
+    }
+
+    function getSellerBalance(address seller) public view returns (uint256) {
+        return s_balances[seller];
     }
 }
