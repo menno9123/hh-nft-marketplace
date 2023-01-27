@@ -168,7 +168,7 @@ contract NftMarketplace is ReentrancyGuard {
         address seller = s_listings[nftAddress][tokenId].seller;
         // call NFT transfer function
         IERC721 nft = IERC721(nftAddress);
-        nft.transferFrom(seller, msg.sender, tokenId);
+        nft.safeTransferFrom(seller, msg.sender, tokenId);
         // increase owner's balance by msg.value
         s_balances[seller] += msg.value;
         // remove item from s_listings --> how to safely remove item from mapping?
