@@ -167,6 +167,7 @@ contract NftMarketplace is ReentrancyGuard {
         // check if msg.value is equal to the price of the NFT AND if NFT is approved for transfer by this contract, otherwise revert with errors
         address seller = s_listings[nftAddress][tokenId].seller;
         // call NFT transfer function
+        delete (s_listings[nftAddress][tokenId]);
         IERC721 nft = IERC721(nftAddress);
         nft.safeTransferFrom(seller, msg.sender, tokenId);
         // increase owner's balance by msg.value
