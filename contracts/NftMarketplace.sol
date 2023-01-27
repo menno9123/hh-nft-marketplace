@@ -3,6 +3,7 @@ pragma solidity ^0.8.7;
 
 // Imports
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 error NftMarketplace__NotEnoughEthForListFee();
 error NftMarketplace__NotEnoughEthToBuy();
@@ -14,7 +15,7 @@ error NftMarketplace__NotOwner();
 error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__ZeroBalance();
 
-contract NftMarketplace {
+contract NftMarketplace is ReentrancyGuard {
     /* Type Declarations */
     struct Listing {
         uint256 price;
@@ -51,6 +52,8 @@ contract NftMarketplace {
         uint256 indexed tokenId,
         uint256 newPrice
     );
+
+    event ItemCanceled(address indexed seller, address indexed nftAddress, uint256 indexed tokenId);
 
     /* Constructors */
     constructor(uint256 listFee) {
@@ -137,10 +140,25 @@ contract NftMarketplace {
         emit ItemListed(msg.sender, nftAddress, tokenId, price);
     }
 
+    /*
+     * @notice Method for cancelling listing
+     * @param nftAddress Address of NFT contract
+     * @param tokenId Token ID of NFT
+     */
+    function cancelListing(address nftAddress, uint256 tokenId)
+        external
+        isOwner(nftAddress, tokenId, msg.sender)
+        isListed(nftAddress, tokenId)
+    {
+        delete (s_listings[nftAddress][tokenId]);
+        emit ItemCanceled(msg.sender, nftAddress, tokenId);
+    }
+
     function buyItem(address nftAddress, uint256 tokenId)
         external
         payable
         isListed(nftAddress, tokenId)
+        nonReentrant
     {
         uint256 price = s_listings[nftAddress][tokenId].price;
         if (msg.value < price) {
@@ -163,7 +181,7 @@ contract NftMarketplace {
         address nftAddress,
         uint256 tokenId,
         uint256 newPrice
-    ) public isOwner(nftAddress, tokenId, msg.sender) {
+    ) public isOwner(nftAddress, tokenId, msg.sender) nonReentrant isListed(nftAddress, tokenId) {
         if (newPrice <= 0) {
             revert NftMarketplace__PriceMustBeAboveOrEqualZero();
         }
@@ -172,11 +190,11 @@ contract NftMarketplace {
     }
 
     function withdrawProceeds() public onlyNonZeroBalance(msg.sender) {
+        s_balances[msg.sender] = 0;
         (bool success, ) = msg.sender.call{value: s_balances[msg.sender]}("");
         if (!success) {
             revert NftMarketplace__TransferFailed();
         }
-        s_balances[msg.sender] = 0;
     }
 
     function getListFee() public view returns (uint256) {
